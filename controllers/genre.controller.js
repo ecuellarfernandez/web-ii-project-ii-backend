@@ -1,5 +1,6 @@
 const db = require("../models");
 const genre = db.genre;
+const { handleFileUpload } = require("../utils/fileHandler");
 
 exports.getGenreList = async (req, res) => {
     try {
@@ -30,23 +31,24 @@ exports.getGenreById = async (req, res) => {
 };
 
 exports.postGenreCreate = async (req, res) => {
-    try{
-        const {errors} = validateGenreRequest(req);
+    try {
+        const { errors } = validateGenreRequest(req);
         if (errors) {
             return res.status(400).send({ errors });
         }
 
+        const imagePath = await handleFileUpload(req.files.image, 'genre');
         const genreData = {
             name: req.body.name,
-            image: req.body.image
-        }
+            image: imagePath
+        };
+
         const genreCreated = await genre.create(genreData);
         if (!genreCreated) {
-            res.status(500).send({ message: "Error al crear el género" });
-            return;
+            return res.status(500).send({ message: "Error al crear el género" });
         }
         res.status(201).send(genreCreated);
-    }catch (error) {
+    } catch (error) {
         res.status(500).send({
             message: "Error al crear el género",
             error: error.message
@@ -123,14 +125,9 @@ exports.deleteGenre = async (req, res) => {
 };
 
 const validateGenreRequest = (req) => {
-    if (!req.body) {
-        return { errors: { message: "Petición inválida" } };
-    }
-    const { name, image } = req.body;
     const errors = {};
 
-    if (!name) errors.name = "El nombre es requerido";
-    if (!image) errors.image = "La imagen es requerida";
+    if (!req.body.name) errors.name = "El nombre es requerido";
 
     if (Object.keys(errors).length > 0) {
         return { errors };
@@ -139,8 +136,7 @@ const validateGenreRequest = (req) => {
     return {
         errors: null,
         genreData: {
-            name,
-            image
+            name: req.body.name
         }
     };
 };
