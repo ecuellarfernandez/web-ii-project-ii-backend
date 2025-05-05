@@ -27,11 +27,17 @@ exports.getSongById = async (req, res) => {
 
 exports.postSongCreate = async (req, res) => {
     try {
+        if (!req.files || !req.files.file) {
+            return res.status(400).send({ message: "El archivo de la canción es requerido" });
+        }
+
         const filePath = await handleFileUpload(req.files.file, 'song');
         const songData = {
             title: req.body.title,
-            file: filePath
+            file: filePath,
+            albumId: req.body.albumId
         };
+
         const { errors } = validateSongRequest({ body: songData });
         if (errors) {
             fs.unlinkSync(filePath);
@@ -43,6 +49,7 @@ exports.postSongCreate = async (req, res) => {
             fs.unlinkSync(filePath);
             return res.status(500).send({ message: "Error al crear la canción" });
         }
+
         res.status(201).send(songCreated);
     } catch (error) {
         res.status(500).send({
@@ -51,7 +58,6 @@ exports.postSongCreate = async (req, res) => {
         });
     }
 };
-
 exports.patchSongUpdate = async (req, res) => {
     if (!req.body) {
         return res.status(400).send({ message: "Petición inválida" });
@@ -61,12 +67,15 @@ exports.patchSongUpdate = async (req, res) => {
     if (!songToUpdate) {
         return res.status(404).send({ message: 'Canción no encontrada' });
     }
-    const { title, file } = req.body;
+    const { title, file, albumId } = req.body;
     if (title) {
         songToUpdate.title = title;
     }
     if (file) {
         songToUpdate.file = file;
+    }
+    if (albumId) {
+        songToUpdate.albumId = albumId;
     }
     const songSaved = await songToUpdate.save();
     if (!songSaved) {
