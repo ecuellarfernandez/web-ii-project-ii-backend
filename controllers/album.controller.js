@@ -16,7 +16,8 @@ exports.getAlbumById = async (req, res) => {
     const { id } = req.params;
     const albumData = await album.findByPk(id, {
         include: [
-            'artist'
+            'artist',
+            'songs'
         ],
     });
     if (!albumData) {
