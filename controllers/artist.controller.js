@@ -14,67 +14,114 @@ exports.getArtistList = async (req, res) => {
 };
 
 exports.getArtistById = async (req, res) => {
-    const { id } = req.params;
-    const artistData = await artist.findByPk(id, {
-        include: [
-            'albums',
-            'genres'
-        ],
-    });
-    if (!artistData) {
-        return res.status(404).send({ message: 'Artista no encontrado' });
+    try {
+        const { id } = req.params;
+
+        const artistData = await artist.findByPk(id, {
+            include: [
+                {
+                    model: db.album,
+                    as: 'albums',
+                    include: [
+                        {
+                            model: db.song,
+                            as: 'songs'
+                        }
+                    ]
+                },
+                {
+                    model: db.genre,
+                    as: 'genres'
+                }
+            ]
+        });
+
+        if (!artistData) {
+            return res.status(404).send({ message: 'Artista no encontrado' });
+        }
+
+        res.send(artistData);
+    } catch (error) {
+        res.status(500).send({
+            message: "Error al obtener el artista",
+            error: error.message
+        });
     }
-    res.send(artistData);
 };
 
 exports.postArtistCreate = async (req, res) => {
-    try{
+    try {
         const imagePath = await handleFileUpload(req.files.image, 'artist');
         const artistData = {
             name: req.body.name,
             image: imagePath
         };
-        const {errors} = validateArtistRequest({body: artistData});
-        if(errors){
+
+        const { errors } = validateArtistRequest({ body: artistData });
+        if (errors) {
             fs.unlinkSync(imagePath);
             return res.status(400).send(errors);
         }
 
         const artistCreated = await artist.create(artistData);
-        if(!artistCreated){
-            fs.unlinkSync(imagePath);
-            return res.status(500).send({ message: "Error al crear el artista" });
+
+        if (req.body.genreIds) {
+            const genreIds = JSON.parse(req.body.genreIds);
+            await artistCreated.setGenres(genreIds);
         }
+
         res.status(201).send(artistCreated);
-    }catch(error){
-        res.status(500).send({ 
-            message: "Error al crear el artista", 
-            error: error.message  
+    } catch (error) {
+        res.status(500).send({
+            message: "Error al crear el artista",
+            error: error.message
         });
     }
 };
 
 exports.patchArtistUpdate = async (req, res) => {
-    if (!req.body) {
+    if (!req.body && !req.files) {
         return res.status(400).send({ message: "Petición inválida" });
     }
+
     const { id } = req.params;
     const artistToUpdate = await artist.findByPk(id);
     if (!artistToUpdate) {
         return res.status(404).send({ message: 'Artista no encontrado' });
     }
-    const { name, image } = req.body;
+
+    const { name } = req.body;
+
     if (name) {
         artistToUpdate.name = name;
     }
-    if (image) {
-        artistToUpdate.image = image;
+
+    if (req.files && req.files.image) {
+        try {
+            const imagePath = await handleFileUpload(req.files.image, 'artist');
+            if (artistToUpdate.image) {
+                fs.unlinkSync(artistToUpdate.image);
+            }
+            artistToUpdate.image = imagePath;
+        } catch (error) {
+            return res.status(500).send({ message: "Error al subir la imagen", error: error.message });
+        }
     }
+
     const artistSaved = await artistToUpdate.save();
     if (!artistSaved) {
-        res.status(500).send({ message: "Error al editar el artista" });
-        return;
+        return res.status(500).send({ message: "Error al editar el artista" });
     }
+
+    if (req.body.genreIds) {
+        try {
+            const genreIds = JSON.parse(req.body.genreIds); 
+            await artistToUpdate.setGenres(genreIds);
+        } catch (error) {
+            return res.status(400).send({ message: "Error al actualizar los géneros", error: error.message });
+        }
+    }
+
     res.send(artistSaved);
 };
 
@@ -91,12 +138,19 @@ exports.putArtistUpdate = async (req, res) => {
     if (!artistToUpdate) {
         return res.status(404).send({ message: 'Artista no encontrado' });
     }
+
     artistToUpdate.name = body.name;
     artistToUpdate.image = body.image;
+
     const artistSaved = await artistToUpdate.save();
     if (!artistSaved) {
         res.status(500).send({ message: "Error al editar el artista" });
         return;
+    }
+
+    if (req.body.genreIds) {
+        const genreIds = JSON.parse(req.body.genreIds);
+        await artistToUpdate.setGenres(genreIds);
     }
 
     res.send(artistSaved);
