@@ -17,7 +17,17 @@ exports.getGenreList = async (req, res) => {
 exports.getGenreById = async (req, res) => {
     try {
         const { id } = req.params;
-        const genreData = await genre.findByPk(id);
+        const genreData = await genre.findByPk(id,{
+            include:[
+                {
+                    model: db.artist,
+                    as: 'artists',
+                    through: {
+                        attributes: [], 
+                    },
+                }
+            ]
+        });
         if (!genreData) {
             return res.status(404).send({ message: 'Género no encontrado' });
         }
